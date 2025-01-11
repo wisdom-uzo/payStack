@@ -2,9 +2,20 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { usePaystackPayment } from 'react-paystack';
+//import { usePaystackPayment } from 'react-paystack';
 import { db } from '@/utils/firebase';
 import { collection, addDoc, query, where, getDocs } from 'firebase/firestore/lite';
+
+// import dynamic from 'next/dynamic';
+// const usePaystackPayment = dynamic(() => import("react-paystack").then((c) => c.usePaystackPayment), {
+//   ssr: false,
+// });
+
+import dynamic from 'next/dynamic';
+const PaystackButton  = dynamic(() => import("react-paystack").then((c) => c.PaystackButton ), {
+  ssr: false,
+});
+
 import { 
   CreditCard, 
   Clock, 
@@ -24,7 +35,9 @@ import 'react-toastify/dist/ReactToastify.css';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 
-const PAYSTACK_PUBLIC_KEY = "your_paystack_public_key";
+
+
+const PAYSTACK_PUBLIC_KEY = "pk_test_bd3815cd7152ae1952909f874afc14734dbd0d69";
 
 const paymentOptions = [
   {
@@ -206,32 +219,48 @@ export default function Dashboard() {
     }
   };
 
-  const initializePayment = (payment) => usePaystackPayment({
-    reference: (new Date()).getTime().toString(),
-    email: user?.email || '',
-    amount: payment?.amount * 100 || 0,
-    publicKey: PAYSTACK_PUBLIC_KEY,
-    metadata: {
-      paymentType: payment?.name,
-      matricNumber: user?.matricNumber
-    }
-  });
+  // const initializePayment = (payment) => usePaystackPayment({
+  //   reference: (new Date()).getTime().toString(),
+  //   email: user?.email || '',
+  //   amount: payment?.amount * 100 || 0,
+  //   publicKey: PAYSTACK_PUBLIC_KEY,
+  //   metadata: {
+  //     paymentType: payment?.name,
+  //     matricNumber: user?.matricNumber
+  //   }
+  // });
 
-  const handlePaymentInit = () => {
-    if (!selectedPayment || !user) {
-      toast.error('Unable to initialize payment. Please try again.');
-      return;
-    }
+  // const handlePaymentInit = () => {
+  //   if (!selectedPayment || !user) {
+  //     toast.error('Unable to initialize payment. Please try again.');
+  //     return;
+  //   }
 
-    const paystack = initializePayment(selectedPayment);
-    paystack({
-      onSuccess: handlePaymentSuccess,
-      onClose: () => {
-        toast.info('Payment cancelled');
-        setSelectedPayment(null);
-      },
-    });
+  //   const paystack = initializePayment(selectedPayment);
+  //   paystack({
+  //     onSuccess: handlePaymentSuccess,
+  //     onClose: () => {
+  //       toast.info('Payment cancelled');
+  //       setSelectedPayment(null);
+  //     },
+  //   });
+  // };
+  const handlePaymentClose = () => {
+    toast.info('Payment cancelled');
+    setSelectedPayment(null);
   };
+  
+  const paystackConfig = selectedPayment ? {
+    email: user?.email,
+    amount: selectedPayment.amount * 100,
+    publicKey: PAYSTACK_PUBLIC_KEY,
+    text: `Pay ₦${selectedPayment.amount.toLocaleString()}`,
+    onSuccess: handlePaymentSuccess,
+    onClose: handlePaymentClose,
+  } : null;
+
+  
+
 
   const handleLogout = () => {
     localStorage.removeItem('user');
@@ -325,7 +354,7 @@ export default function Dashboard() {
         </div>
 
         {/* Payment Options */}
-        <h2 className="text-xl font-bold text-white mb-4">Payment Options</h2>
+        {/* <h2 className="text-xl font-bold text-white mb-4">Payment Options</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           {paymentOptions.map((option) => {
             const isPaid = transactions.some(
@@ -372,6 +401,8 @@ export default function Dashboard() {
                       Pay Now
                     </button>
                   )}
+
+                  
                 </div>
                 <div className="mt-4 flex items-center text-sm">
                   <Calendar className="h-4 w-4 text-gray-400 mr-1" />
@@ -380,9 +411,89 @@ export default function Dashboard() {
                   </span>
                 </div>
               </div>
+              
+
             );
           })}
-        </div>
+        </div> */}
+
+          {/* Payment Options */}
+          <div className="mb-8">
+          <h2 className="text-xl font-bold text-white mb-4 flex items-center">
+            <CreditCard className="h-6 w-6 mr-2" />
+            Available Payments
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {paymentOptions.map((option) => {
+                  const isPaid = transactions.some(t => t.paymentType === option.name);
+                  const isDeadlinePassed = option.deadline && new Date(option.deadline) < new Date();
+                  
+                  return (
+                    <div
+                      key={option.id}
+                      className={`bg-white/10 backdrop-blur-lg rounded-lg p-6 border ${
+                        isPaid 
+                          ? 'border-green-500/20' 
+                          : isDeadlinePassed 
+                            ? 'border-red-500/20'
+                            : 'border-gray-700 hover:border-blue-500/20'
+                      } transition-all duration-200`}
+                    >
+                      <div className="flex items-start justify-between mb-4">
+                        <div>
+                          <h3 className="text-lg font-semibold text-white mb-1">
+                            {option.name}
+                            {option.required && (
+                              <span className="ml-2 text-xs bg-red-500/20 text-red-400 px-2 py-1 rounded-full">
+                                Required
+                              </span>
+                            )}
+                          </h3>
+                          <p className="text-gray-400 text-sm">{option.description}</p>
+                        </div>
+                        {option.deadline && (
+                          <div className="flex items-center text-xs text-gray-400">
+                            <Calendar className="h-4 w-4 mr-1" />
+                            {new Date(option.deadline).toLocaleDateString()}
+                          </div>
+                        )}
+                      </div>
+    
+                      <div className="flex items-center justify-between mt-4">
+                        <span className="text-2xl font-bold text-white">₦{option.amount.toLocaleString()}</span>
+                        {isPaid ? (
+                          <span className="flex items-center text-green-400 text-sm">
+                            <CheckCircle className="h-4 w-4 mr-1" />
+                            Paid
+                          </span>
+                        ) : isDeadlinePassed ? (
+                          <span className="flex items-center text-red-400 text-sm">
+                            <XCircle className="h-4 w-4 mr-1" />
+                            Deadline Passed
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => setSelectedPayment(option)}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                          >
+                            Pay Now
+                          </button>
+                        )}
+                      </div>
+    
+                      {selectedPayment?.id === option.id && (
+                        <div className="mt-4 pt-4 border-t border-gray-700">
+                          <PaystackButton
+                            {...paystackConfig}
+                            className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm flex items-center justify-center"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
 
         {/* Transaction History */}
         <div className="flex items-center justify-between mb-4">
